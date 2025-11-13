@@ -1,0 +1,325 @@
+---
+title: "Global Report with Hormonal Network Analysis"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    theme: flatly
+    highlight: tango
+params:
+  de_results: NULL
+  enrichment_results: NULL
+  grn_object: NULL
+  report_date: !r Sys.Date()
+vignette: >
+  %\VignetteIndexEntry{Template_report_hormonal}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(DT)
+library(dplyr)
+library(igraph)
+library(ggraph)
+library(knitr)
+library(kableExtra)
+library(ggrepel)
+library(htmltools)
+library(gridExtra)
+
+# fallback operator
+`%||%` <- function(x, y) if (!is.null(x)) x else y
+```
+
+#  Overview
+
+This is a global report built for **XYomics output on Single-cell data**.
+
+**Date:** `r params$report_date`\
+**Includes:** - Differential expression analysis (DEGs) - Pathway enrichment analysis - Hormonal protein-protein interaction networks analysis
+
+------------------------------------------------------------------------
+
+#  Differential Expression Results of categorized DEGs by cell types
+
+```{r de-results, echo=F}
+name_df=""
+
+get_name <- function(df){
+  for (i in seq_along(params$de_results)){
+
+    name=names(params$de_results)[i]
+
+    if (length(all.equal(df, params$de_results[[name]]))==1){
+      
+      name_df=name
+
+    } 
+  } 
+  return(name_df)
+}
+
+render_de_table <-  function(df) {
+    if (nrow(df) == 0) {
+    return(tags$div(
+      tags$h4(paste("DEGs Results -", name)),
+      tags$p("No significant DEGs for this category.")
+    ))
+  }
+  else
+  {   name <- get_name(df) 
+    return(tags$div(
+      tags$h4(paste("DEGs Results -", name)),
+      tags$p( datatable(df%>% mutate(across(ends_with("logFC"), ~round(.,digits=3))) %>% mutate(across(ends_with("FDR"), ~format(.,scientific=T,digits=3))),
+            options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE)))
+  )
+
+  }
+
+ 
+  
+  
+}
+
+tagList(
+  lapply(params$de_results, render_de_table)
+)
+```
+## Volcano Plots by cell types and categories of DEGs
+
+```{r volcano-plots , echo=FALSE,results='asis', fig.keep='all', fig.width=8, fig.height=6}
+
+create_volcano_plot <- function(df, deg_type, x_col, y_col, title_suffix) {
+  df_filtered <- df %>% filter(DEG_Type == deg_type)
+  
+  
+   df_filtered  <-   df_filtered  %>%
+  mutate(GeneName = rownames(.)) %>%
+  mutate(Significant = GeneName %in% c(
+      df_filtered  %>% filter(Male_FDR < 0.05, abs(Male_avg_logFC) > 1.5) %>%
+      slice_min(Male_FDR, n = 5, with_ties = FALSE) %>%
+      rownames(),
+      df_filtered  %>% filter(Female_FDR < 0.05, abs(Female_avg_logFC) > 1.5) %>%
+      slice_min(Female_FDR, n = 5, with_ties = FALSE) %>%
+      rownames()
+  ))
+  
+  ggplot(df_filtered, aes_string(x = x_col, y = y_col, color = "Significant")) +
+    geom_point(alpha = 0.6) +
+    scale_color_manual(values = c("grey70", "firebrick")) +
+    theme_minimal() +
+    labs(
+      x = "log2 Fold Change",
+      y = "-log10(p-value)",
+      title = paste("Volcano Plot -", title_suffix, "-", deg_type)
+    ) +
+    theme(legend.position = "bottom", plot.title = element_text(size = 10, hjust = 0.5, margin = margin(b = 10))) +
+    geom_text_repel(
+      data = df_filtered %>% filter(Significant),
+      aes(label = Gene_Symbols),
+      size = 3,
+      max.overlaps = 30
+    )
+}
+
+
+# Store plots in a list
+all_plots <- list()
+
+# Generate plots
+for (i in seq_along(params$de_results)) {
+  df <-params$de_results[[i]]
+  name <- names(params$de_results)[i] %||% paste("Set", i)
+  
+
+  
+  plots <- list(
+    create_volcano_plot(df, "female-specific", "Female_avg_logFC", "-log10(Female_FDR)", name),
+    create_volcano_plot(df, "male-specific", "Male_avg_logFC", "-log10(Male_FDR)", name),
+    create_volcano_plot(df, "sex-dimorphic", "Male_avg_logFC - Female_avg_logFC", "-log10(Male_FDR + Female_FDR)", name),
+    create_volcano_plot(df, "sex-neutral", "Male_avg_logFC + Female_avg_logFC", "-log10(Male_FDR + Female_FDR)", name)
+  )
+  
+  all_plots[[name]] <- plots
+  
+}
+
+
+for (set_name in names(all_plots)) {
+  cat(sprintf("\n\n### Volcano Plot - %s\n\n", set_name))
+  grid.arrange(grobs = all_plots[[set_name]], ncol = 2)
+}
+```
+
+------------------------------------------------------------------------
+
+# Enrichment / Pathway Analysis
+
+```{r enrichment-tables, echo=FALSE}
+
+render_enrichment_table <- function(df, name) {
+  if (is.null(df)) {
+    return(tags$div(
+      tags$h4(paste("Pathway Enrichment -", name)),
+      tags$p("No significant pathways for this category.")
+    ))
+  }
+  else
+  {  
+    df=df %>% relocate(DEG_Type)
+    return(tags$div(
+    tags$h4(paste("Pathway Enrichment -", name)),
+    tags$p(datatable(
+      df %>% mutate_if(is.numeric, ~format(., scientific=T, digits=3)),
+      options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE)))
+  )
+    
+  }
+  
+  
+}
+
+
+
+tagList(lapply(seq_along(params$enrichment_results), function(i) {
+  name <- names(params$enrichment_results)[i] %||% paste("Set", i)
+  sublist <- params$enrichment_results[[i]]
+  combined_df <- do.call(rbind, lapply(names(sublist ), function(name) {
+    df <- sublist [[name]]
+    if (nrow(df) == 0) return(NULL) 
+    df$DEG_Type <- name
+    return(df)
+  }))
+
+
+  render_enrichment_table(combined_df, name)
+}))
+
+```
+
+## Dotplot of the pathways by cell types
+```{r pathways visualization , echo = FALSE,  results='asis', fig.keep='all', fig.width=15, fig.height=7}
+
+create_dotplot <- function(df, inner_name) {
+  if (nrow(df) > 0) {
+    enr <- convertdf2enr(df)
+    p <-  suppressMessages(dotplot(enr, showCategory = 10, title = paste("Top enriched Pathways", inner_name)) +
+      scale_y_discrete(expand = expansion(mult = c(0.1, 0.1))) +
+      theme(plot.margin = margin(10, 10, 15, 10)) +
+      scale_size_continuous(labels = function(x) as.integer(round(x)))  )
+    return(p)
+  } else {
+    return(NULL)
+  }
+}
+
+all_plots <- list()
+
+for (i in seq_along(params$enrichment_results)) {
+  df <- params$enrichment_results[[i]]
+  outer_name <- names(params$enrichment_results)[i] %||% paste("Set", i)
+  sublist <- params$enrichment_results[[i]]
+  
+  dplots <- list()  # <-- Move this INSIDE the outer loop
+  
+  for (j in seq_along(sublist)) {
+    df <- sublist[[j]]
+    inner_name <- names(sublist)[j] %||% paste("Subset", j)
+    dplots[[inner_name]] <- create_dotplot(df, inner_name)
+  }
+  
+  all_plots[[outer_name]] <- dplots
+}
+
+
+for (set_name in names(all_plots)) {
+  if (length(all_plots[[set_name]])>=1){
+    cat(sprintf("\n\n###  DotPlot - %s\n\n", set_name))
+    grid.arrange(grobs = all_plots[[set_name]], ncol =2)
+  }
+ 
+}
+
+```
+
+# Hormonal protein-protein interaction network (PPI)
+
+```{r grn-summary , echo = FALSE,  results='asis', fig.keep='all', fig.width=15, fig.height=10}
+
+
+all_plots <- list()
+
+for (i in seq_along(params$grn_object)) {
+  outer_name <- names(params$grn_object)[i] %||% paste("GRN_Group", i)
+  sublist <- params$grn_object[[i]]
+  gplots <- list()
+
+  for (j in seq_along(sublist)) {
+    g <- sublist[[j]]
+    inner_name <- names(sublist)[j] %||% paste("Network", j)
+
+    if (vcount(g) > 2) {
+      # Compute degree
+      degree_vals <- degree(g, mode = "all")
+      V(g)$degree <- degree_vals
+
+      # Identify top hub nodes
+      top_n <- min(20, vcount(g))
+      top_nodes <- names(sort(degree_vals, decreasing = TRUE))[1:top_n]
+
+      # Create layout
+      layout <- create_layout(g, layout = "fr")
+
+      # Add labels
+      layout$label <- if (vcount(g) < 20) {
+        layout$name
+      } else {
+        ifelse(layout$name %in% top_nodes, layout$name, "")
+      }
+
+      gplots[[inner_name]] <- ggraph(layout) +
+        geom_edge_link(aes(edge_alpha = 0.5), color = "grey", show.legend = FALSE) +
+        geom_node_point(aes(size = degree, fill = degree), shape = 21, color = "black", stroke = 0.5,  show.legend = c(size = FALSE, fill = TRUE)) +
+        scale_size(range = c(1, 10)) +
+        scale_fill_gradient(low = "azure", high = "darkcyan",  labels = scales::number_format(accuracy = 1)) +
+        geom_label_repel(
+          aes(x = x, y = y, label = label),
+          color = "black", size = 3, fill = "white", box.padding = 0.5,
+          point.padding = 0.5, max.overlaps = 1000
+        ) +
+        theme_void() +
+        labs(
+          title = paste("Hormonal protein-protein interaction network -", outer_name, "-", inner_name),
+          fill = "Node Degree"
+        ) +
+        theme(legend.position = "right", plot.title = element_text(hjust = 0.5, size = 14)) 
+    }
+  }
+  all_plots[[outer_name]] <- gplots
+}
+
+for (set_name in names(all_plots)) {
+  if (length(all_plots[[set_name]])>=1){
+    cat(sprintf("\n\n### Hormonal PPI - %s\n\n", set_name))
+    grid.arrange(grobs = all_plots[[set_name]], ncol =2)
+  } 
+ 
+}
+
+```
+
+------------------------------------------------------------------------
+
+# Session Info
+
+```{r session-info}
+sessionInfo()
+```
+
+------------------------------------------------------------------------
+
+### Auto-generated on `r Sys.time()` using `XYomics` reporting

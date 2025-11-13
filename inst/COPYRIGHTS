@@ -1,0 +1,10 @@
+Files: src/PCSF.cpp
+Copyright:
+  2017 Murodzhon Akhmedov
+  2025 Enrico Glaab, Sophie Le Bars, Mohamed Soudy
+License: MIT
+
+Description:
+  The code in src/PCSF.cpp is adapted from the PCSF project, released under
+  the MIT License. Modifications were made to integrate the algorithm into
+  XYomics. All original copyright and license notices are preserved.

@@ -1,0 +1,296 @@
+---
+title: "Single Cell RNA-Seq Example"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    theme: flatly
+    highlight: tango
+params:
+  de_results: NULL
+  enrichment_results: NULL
+  grn_object: NULL
+  report_date: !r Sys.Date()
+vignette: >
+  %\VignetteIndexEntry{Single Cell Example}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+## Single-Cell RNA-Seq Analysis with XYomics
+Authors: Sophie Le Bars, Mohamed Soudy, and Enrico Glaab
+
+# Introduction
+
+This vignette provides a guide for using the **XYomics** package to analyze sex-related patterns in single-cell RNA-sequencing (scRNA-seq) data. We will walk through a complete workflow, from data simulation to network analysis, demonstrating how to identify and interpret sex-specific gene expression changes at the cell-type level.
+
+The tutorial covers:
+1.  **Simulating a scRNA-seq dataset**.
+2.  **Standard preprocessing** using the Seurat package.
+3.  **Performing differential expression analysis** using different strategies: sex-stratified analysis and interaction analysis.
+4.  **Detecting and categorizing sex-specific DEGs** for each cell type.
+5.  **Visualizing gene expression** using dot plots.
+6.  **Performing pathway enrichment analysis** to uncover biological functions.
+7.  **Constructing and visualizing protein-protein networks**.
+
+# Data Simulation and Preprocessing
+
+## Simulating Single-Cell Data
+We start by simulating a scRNA-seq dataset containing 10 mock samples. This creates a Seurat object with a count matrix ready for analysis.
+
+```{r simulate-data, message=FALSE, warning=FALSE}
+library(Seurat)
+library(org.Hs.eg.db)
+library(stringr)
+library(clusterProfiler)
+library(igraph)
+library(XYomics)
+library(ggrepel)
+library(ggraph)
+library(dplyr)
+library(tidyr)
+
+set.seed(123)
+gene_sample <- keys(org.Hs.eg.db, keytype = "SYMBOL") %>% 
+  as.data.frame() %>% 
+  setNames("genes") %>%
+  filter(!str_starts(genes, "LOC")) 
+
+gene_sample <- sample(gene_sample$genes, 300, replace = FALSE)
+
+matrices <- lapply(1:10, function(i) {
+  batch_effect <- rgamma(300, shape = 2, scale = 1.5)
+  m <- matrix(
+    ifelse(runif(300*100) < 0.1, 0, rnbinom(300*100, size = 1/0.5, mu = 10 * batch_effect)),
+    nrow = 300,
+    dimnames = list(gene_sample, paste("Sample", i, ": Cell", 1:100))
+  )
+  CreateSeuratObject(counts = m, meta.data = data.frame(sample = paste("Sample", i)))
+})
+
+sim.seurat <- Reduce(merge, matrices)
+sim.seurat@meta.data$sample <- sapply(strsplit(rownames(sim.seurat@meta.data), ":"), "[", 1)
+```
+
+## Preprocessing and Clustering
+We perform standard scRNA-seq preprocessing, including normalization, feature selection, and scaling. We then apply dimensionality reduction (PCA and UMAP) and clustering to identify cell populations.
+
+```{r preprocessing, message=FALSE, warning=FALSE, results='hide'}
+sim.seurat <- NormalizeData(sim.seurat)
+sim.seurat <- FindVariableFeatures(sim.seurat, selection.method = "vst", nfeatures = 2000)
+sim.seurat <- ScaleData(sim.seurat)
+sim.seurat <- RunPCA(sim.seurat)
+sim.seurat <- FindNeighbors(sim.seurat, dims = 1:10)
+sim.seurat <- FindClusters(sim.seurat)
+sim.seurat <- RunUMAP(sim.seurat, dims = 1:10)
+DimPlot(sim.seurat)
+```
+
+## Annotating Cell Types and Conditions
+For the analysis, the Seurat object must contain metadata columns for cell type (`cell_type`), sex (`sex`), and condition (`status`). Here, we add mock annotations to our simulated data.
+
+```{r annotate-data, warning=FALSE}
+# Assign mock cell types
+cellTypes <- c("cell type 1", "cell type 2", "cell type 3", "cell type 4", "cell type 5")
+sim.seurat@meta.data$cell_type <- sample(cellTypes, nrow(sim.seurat@meta.data), replace = TRUE)
+Idents(sim.seurat) <- "cell_type"
+
+# Assign mock status (WT/TG) and sex (M/F)
+samples <- sim.seurat@meta.data$sample
+sim.seurat@meta.data$status <- ifelse(grepl("1|3|5|8|9", samples), "TG", "WT")
+sim.seurat@meta.data$sex <- ifelse(grepl("1|2|4|8|10", samples), "M", "F")
+
+```
+
+# Differential Expression Analysis Strategies
+
+When analyzing sex differences, researchers must be aware of the pitfalls of associated statistical analyses, including the limitations of sex-stratified analyses and the challenges of analyzing interactions between sex and disease state.
+
+**Sex-stratified analyses** use standard statistical tests for differential molecular abundance analysis to test for disease-associated changes in each sex separately. However, a pure sex-stratified analysis may misclassify a change as sex-specific if it uses a standard significance threshold to assess both the presence and absence of an effect. Stochastic variation in significance scores around a chosen threshold may lead to the erroneous detection of significance specific to only one sex, especially if the p-value in the other sex marginally exceeds the chosen threshold. In addition, such an analysis may miss sex-modulated changes, where significant changes in both sexes share the same direction but differ significantly in magnitude; these changes require cross-sex comparisons for accurate detection.
+
+**Interaction analysis** (using a multiplicative term like `sex*disease`) formally tests whether the relationship between disease and molecular changes differs significantly between males and females. Not only can such interaction terms reveal complexities in disease mechanisms that might otherwise be obscured in analyses that do not consider SABV, but they also have the potential to detect changes that are limited to the magnitude of an effect, an aspect that sex-stratified analyses do not capture. Nevertheless, robust estimation of interaction effects requires large sample sizes, which are often not available due to the costs associated with advanced molecular profiling techniques such as single-cell RNA sequencing.
+
+The **XYomics** package provides functions for both types of analyses.
+
+## Method 1: Sex-Stratified Analysis
+
+We use `sex_stratified_analysis_sc()` to identify DEGs between conditions separately for males and females within each cell type.
+
+```{r sex-stratified-analysis, message=FALSE, warning=FALSE}
+# Run for all cell types
+sim.seurat <- JoinLayers(sim.seurat) #this is for the simulated object but not always required for your own object
+results <- sex_stratified_analysis_sc(sim.seurat, min_logfc = -Inf)
+
+sex_degs <- lapply(levels(as.factor(sim.seurat@meta.data$cell_type)), function(cell) {
+  list(
+    male = results$male_DEGs[[cell]],
+    female = results$female_DEGs[[cell]]
+  )
+})
+
+names(sex_degs) <- levels(as.factor(sim.seurat@meta.data$cell_type))
+result_categories <- lapply(sex_degs, function(degs) categorize_sex_sc(degs$male, degs$female))
+
+# Example for one cell type
+result_one <- result_categories$`cell type 1`
+cat("\nTop categorized DEGs for 'cell type 1' (from stratified analysis):\n")
+head(result_one)
+```
+
+## Method 2: Sex-Phenotype Interaction Analysis
+
+We use `sex_interaction_analysis_sc()` to perform a formal interaction analysis, directly comparing the condition effect between sexes.
+
+```{r sex-interaction-analysis, message=FALSE, warning=FALSE}
+# Example for one cell type (e.g., "cell type 1")
+target_cell <- "cell type 1"
+interaction_results_one_cell <- sex_interaction_analysis_sc(sim.seurat, target_cell_type = target_cell)
+cat(paste0("\nSummary of Sex-Phenotype Interaction analysis results for '", target_cell, "':\n"))
+print(interaction_results_one_cell$summary_stats)
+cat(paste0("\nTop genes from Sex-Phenotype Interaction analysis for '", target_cell, "':\n"))
+print(head(interaction_results_one_cell$all_results[[1]]))
+```
+
+# Visualization of Gene Expression
+Dot plots are an effective way to visualize gene expression in scRNA-seq data. Here, we show the expression of the top male-specific, female-specific, and sex-dimorphic genes across all cell types, split by sex and condition.
+
+```{r dot-plots, message=FALSE, warning=FALSE, fig.width=10, fig.height=8}
+# Get top gene from each category for 'cell type 1'
+top_male_gene <- result_one %>% filter(DEG_Type == "male-specific") %>% top_n(1, -Male_FDR) %>% pull(Gene_Symbols)
+top_female_gene <- result_one %>% filter(DEG_Type == "female-specific") %>% top_n(1, -Female_FDR) %>% pull(Gene_Symbols)
+top_dimorphic_gene <- result_one %>% filter(DEG_Type == "sex-dimorphic") %>% top_n(1, -Male_FDR) %>% pull(Gene_Symbols)
+
+top_genes <- c(top_male_gene, top_female_gene, top_dimorphic_gene)
+
+# Create dot plot
+if (length(top_genes) > 0) {
+  sim.seurat$group_plot <- paste(sim.seurat$cell_type, sim.seurat$sex, sim.seurat$status, sep = "_")
+  Idents(sim.seurat) <- "group_plot"
+  # Seurat v5 requires specifying assay for DotPlot
+  DotPlot(sim.seurat, features = top_genes, cols = c("blue", "red"), assay = "RNA") +
+    coord_flip() +
+    labs(title = "Expression of Top Sex-Specific and Dimorphic Genes") +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+}
+```
+
+# Pathway Enrichment Analysis
+We perform pathway enrichment analysis to identify biological pathways over-represented in our DEG categories. The `categorized_enrich_sc` function automates this for all categories.
+
+```{r pathway-analysis, message=FALSE, warning=FALSE}
+# Run for all cell types
+pathway_category <- lapply(result_categories, function(cell) categorized_enrich_sc(cell))
+cat("\nTop pathway results for 'cell type 1':\n")
+print(head(pathway_category$`cell type 1`))
+
+# Run for one specific cell type
+pathway_category_one <- categorized_enrich_sc(result_one)
+cat("\nTop pathway results for 'cell type 1' (re-run separately):\n")
+print(head(pathway_category_one))
+```
+
+# Protein-protein interaction Network Analysis
+Finally, we construct a protein-protein interaction network to explore the interactions between our DEGs.
+
+## Building the Network
+We first fetch a protein-protein interaction network from the STRING database. Then, we use the PCSF algorithm via `construct_ppi_pcsf` to extract a relevant subnetwork based on "prizes" derived from our DEG p-values.
+
+```{r build-network, warning=FALSE, message=FALSE}
+# Fetch STRING network (can be replaced with a custom network)
+# g <- get_string_network(organism = "9606", score_threshold = 900)
+
+# Load a pre-existing network from a file
+g <- readRDS(system.file("extdata", "string_example_network.rds", package = "XYomics")) # This should load the 'g' variable
+
+```
+
+
+```{r network-analysis, warning=FALSE, message=FALSE}
+
+### Run for all cell type
+
+
+network_results <- list()
+
+for (cell_type in names(result_categories)) {
+  
+  # Extract DEG results for the current cell type
+  cell_results <- result_categories[[cell_type]]
+  
+  # Filter DEGs by type
+  male_specific       <- cell_results[cell_results$DEG_Type == "male-specific", ]
+  female_specific     <- cell_results[cell_results$DEG_Type == "female-specific", ]
+  sex_dimorphic       <- cell_results[cell_results$DEG_Type == "sex-dimorphic", ]
+  sex_neutral         <- cell_results[cell_results$DEG_Type == "sex-neutral", ]
+  
+  # Convert to log-transformed prizes
+  male_prizes <- -log10(male_specific$Male_FDR)
+  names(male_prizes) <- male_specific$Gene_Symbols
+  
+  female_prizes <- -log10(female_specific$Female_FDR)
+  names(female_prizes) <- female_specific$Gene_Symbols
+  
+  dimorphic_prizes <- -log10((sex_dimorphic$Male_FDR + sex_dimorphic$Female_FDR) / 2)
+  names(dimorphic_prizes) <- sex_dimorphic$Gene_Symbols
+  
+  neutral_prizes <- -log10((sex_neutral$Male_FDR + sex_neutral$Female_FDR) / 2)
+  names(neutral_prizes) <- sex_neutral$Gene_Symbols
+  
+  # Construct ppis
+  male_network     <- construct_ppi_pcsf(g = g, prizes = male_prizes)
+  female_network   <- construct_ppi_pcsf(g = g, prizes = female_prizes)
+  dimorphic_network <- construct_ppi_pcsf(g = g, prizes = dimorphic_prizes)
+  neutral_network   <- construct_ppi_pcsf(g = g, prizes = neutral_prizes)
+  
+  # Store all results per cell type
+  network_results[[cell_type]] <- list(
+    male_network      = male_network,
+    female_network    = female_network,
+    dimorphic_network = dimorphic_network,
+    neutral_network   = neutral_network
+  )
+}
+
+network_results
+
+
+# Example for one specific cell type
+
+# Create prizes from dimorphic DEGs in 'cell type 1'
+dimorphic_specific <- result_one[result_one$DEG_Type == "sex-dimorphic", ]
+dimorphic_prizes <- -log10((dimorphic_specific$Male_FDR + dimorphic_specific$Female_FDR) / 2)
+names(dimorphic_prizes) <-dimorphic_specific$Gene_Symbols
+
+# Construct the PCSF subnetwork
+dimorphic_network <- construct_ppi_pcsf(g = g, prizes = dimorphic_prizes)
+```
+
+## Visualizing the Network
+We use plot_network() to visualize the network, highlighting nodes based on their degree (i.e., significance). Each node also includes a barplot showing logFC values, blue for males and pink for females.
+
+```{r visualize-network, warning=FALSE, message=FALSE}
+if (!is.null(dimorphic_network) && igraph::vcount(dimorphic_network) > 0) {
+  #Generate network visualization
+  plot_network(dimorphic_network, "Cell type 1", "sex-dimorphic", result_one)
+} else {
+  cat("No network could be constructed for this category.")
+}
+```
+
+# Generating a Report
+The `generate_cat_report` function can be used to compile all results into a single HTML report.
+
+```{r report, eval=FALSE}
+# This command generates a comprehensive HTML report
+network_results  <- lapply(network_results , function(cell) {
+  Filter(Negate(is.null), cell)
+})
+
+
+generate_cat_report(result_categories, pathway_category, network_results)
+
+
+```
+

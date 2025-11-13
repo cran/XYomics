@@ -1,0 +1,307 @@
+---
+title: "Bulk RNA-Seq Example"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    theme: flatly
+    highlight: tango
+params:
+  de_results: NULL
+  enrichment_results: NULL
+  grn_object: NULL
+  report_date: !r Sys.Date()
+vignette: >
+  %\VignetteIndexEntry{Bulk RNA-Seq Example}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+## Bulk RNA-Seq Analysis with XYomics
+Authors: Enrico Glaab and Sophie Le Bars
+
+# Introduction
+
+This vignette demonstrates a standard workflow for analyzing bulk RNA-seq data to identify sex-specific effects using the **XYomics** package. The package provides a streamlined set of tools for differential expression, pathway analysis, and network-based interpretation.
+
+This tutorial covers the following key steps:
+
+1.  **Simulating a bulk RNA-seq dataset** with built-in sex-specific and shared gene expression changes.
+2.  **Discussing and applying three different strategies for differential expression analysis**: sex-stratified analysis, difference of differences analysis, and interaction analysis.
+3.  **Identifying and categorizing sex-specific genes** into distinct groups (male-specific, female-specific, etc.) based on stratified analysis.
+4.  **Visualizing expression patterns** of top genes using the package's built-in plotting functions.
+5.  **Conducting pathway enrichment analysis** to determine the biological functions of the identified gene sets.
+6.  **Constructing and visualizing a protein-protein interaction network** to explore the interactions between key genes.
+
+# Data Simulation
+
+We begin by simulating a bulk RNA-seq dataset to illustrate the package's capabilities. The `simulate_omics_data` function creates a dataset with 500 genes and 100 samples, balanced across phenotype (Control/Disease) and sex (male/female).
+
+The simulation introduces three types of effects:
+-   **Male-specific:** Genes up-regulated in the disease state only in males.
+-   **Female-specific:** Genes up-regulated in the disease state only in females.
+-   **Sex-dimorphic:** Genes regulated in opposite directions between males and females in the disease state.
+
+```{r simulate-data, message=FALSE, warning=FALSE}
+library(XYomics)
+library(dplyr)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+
+simulate_omics_data <- function(n_samples = 100, n_genes = 500) {
+  set.seed(123)
+  all_entrez <- keys(org.Hs.eg.db, keytype = "ENTREZID")
+  selected_entrez <- sample(all_entrez, n_genes)
+  
+  sex <- rep(c("m", "f"), each = n_samples / 2)
+  phenotype <- rep(rep(c("Control", "Disease"), each = n_samples / 4), 2)
+  
+  expression_data <- matrix(rnorm(n_samples * n_genes, mean = 10, sd = 0.1), 
+                            nrow = n_genes, ncol = n_samples)
+  
+  male_disease <- which(sex == "m" & phenotype == "Disease")
+  female_disease <- which(sex == "f" & phenotype == "Disease")
+  
+  expression_data[1:25, male_disease] <- expression_data[1:25, male_disease] + 8
+  expression_data[26:50, female_disease] <- expression_data[26:50, female_disease] + 8
+  expression_data[51:75, male_disease] <- expression_data[51:75, male_disease] + 6
+  expression_data[51:75, female_disease] <- expression_data[51:75, female_disease] - 6
+  
+  colnames(expression_data) <- paste0("Sample", 1:n_samples)
+  rownames(expression_data) <- selected_entrez
+  
+  return(list(expression_data = expression_data, phenotype = phenotype, sex = sex))
+}
+
+simulated_data <- simulate_omics_data()
+omics_data <- simulated_data$expression_data
+phenotype <- simulated_data$phenotype
+sex <- simulated_data$sex
+
+cat("Dimensions of expression data:", dim(omics_data), "\n")
+```
+
+# Differential Expression Analysis Strategies
+
+When analyzing sex differences, researchers must be aware of the pitfalls of associated statistical analyses, including the limitations of sex-stratified analyses and the challenges of analyzing interactions between sex and disease state.
+
+**Sex-stratified analyses** use standard statistical tests for differential molecular abundance analysis to test for disease-associated changes in each sex separately. These may include classical parametric hypothesis tests, such as Welch’s test for normally distributed data, or non-parametric tests, such as the Mann–Whitney U test, as well as special moderated statistics for high-dimensional omics data analysis, such as the empirical Bayes moderated t-statistic. However, a pure sex-stratified analysis may misclassify a change as sex-specific if it uses a standard significance threshold to assess both the presence and absence of an effect. Stochastic variation in significance scores around a chosen threshold may lead to the erroneous detection of significance specific to only one sex, especially if the p-value in the other sex marginally exceeds the chosen threshold. In addition, such an analysis may miss sex-modulated changes, where significant changes in both sexes share the same direction but differ significantly in magnitude; these changes require cross-sex comparisons for accurate detection.
+
+**Interaction analysis** (using a multiplicative term like `sex*disease`) formally tests whether the relationship between disease and molecular changes differs significantly between males and females. Not only can such interaction terms reveal complexities in disease mechanisms that might otherwise be obscured in analyses that do not consider SABV, but they also have the potential to detect changes that are limited to the magnitude of an effect, an aspect that sex-stratified analyses do not capture. Nevertheless, robust estimation of interaction effects requires large sample sizes, which are often not available due to the costs associated with advanced molecular profiling techniques such as single-cell RNA sequencing.
+
+The **XYomics** package provides functions for all three types of analyses.
+
+## Method 1: Sex-Stratified Analysis
+
+Here, we use the `sex_stratified_analysis_bulk` function to perform a stratified analysis.
+
+```{r stratified-analysis}
+male_deg <- sex_stratified_analysis_bulk(
+  x = omics_data,
+  phenotype = phenotype,
+  gender = sex,
+  analysis_type = "male"
+)
+
+female_deg <- sex_stratified_analysis_bulk(
+  x = omics_data,
+  phenotype = phenotype,
+  gender = sex,
+  analysis_type = "female"
+)
+
+cat("Top differentially expressed genes in males (stratified analysis):\n")
+print(head(male_deg))
+```
+
+## Method 2: Interaction Term Analysis
+
+We use the `sex_interaction_analysis_bulk` function to perform a formal interaction analysis using a multiplicative term.
+
+```{r interaction-term-analysis-bulk}
+interaction_term_results_bulk <- sex_interaction_analysis_bulk(
+  x = omics_data,
+  phenotype = phenotype,
+  gender = sex,
+  phenotype_labels = c("Control", "Disease"),
+  sex_labels = c("f", "m")
+)
+
+cat("Top genes from Interaction Term analysis (bulk):\n")
+print(head(interaction_term_results_bulk))
+```
+
+# Identification of Sex-Specific Genes (from Stratified Analysis)
+
+The `identify_sex_specific_genes` function categorizes genes based on the results of the **stratified analysis**. This provides a useful, albeit potentially less robust, classification.
+
+```{r sex-specific-analysis}
+sex_specific_results <- identify_sex_specific_genes(
+  male_results = male_deg,
+  female_results = female_deg,
+  target_fdr = 0.05,
+  exclude_fdr = 0.5
+)
+
+cat("Number of genes in each category (from stratified analysis):\n")
+print(table(sex_specific_results$gene_type))
+```
+
+# Visualization of Expression Patterns
+
+We use `generate_boxplot` to visualize the expression of top genes identified by the stratified analysis.
+
+```{r visualization}
+# Male-specific gene
+top_male_gene <- sex_specific_results %>%
+  filter(gene_type == "male-specific") %>%
+  arrange(male_FDR) %>%
+  pull(gene_id) %>%
+  head(1)
+
+generate_boxplot(
+  x = omics_data,
+  index = top_male_gene,
+  phenotype = phenotype,
+  gender = sex,
+  title = paste("Expression of Top Male-Specific Gene:", top_male_gene)
+)
+
+# Female-specific gene
+top_female_gene <- sex_specific_results %>%
+  filter(gene_type == "female-specific") %>%
+  arrange(female_FDR) %>%
+  pull(gene_id) %>%
+  head(1)
+
+generate_boxplot(
+  x = omics_data,
+  index = top_female_gene,
+  phenotype = phenotype,
+  gender = sex,
+  title = paste("Expression of Top Female-Specific Gene:", top_female_gene)
+)
+
+# Sex-dimorphic gene
+top_dimorphic_gene <- sex_specific_results %>%
+  filter(gene_type == "sex-dimorphic") %>%
+  arrange(male_FDR) %>%
+  pull(gene_id) %>%
+  head(1)
+
+generate_boxplot(
+  x = omics_data,
+  index = top_dimorphic_gene,
+  phenotype = phenotype,
+  gender = sex,
+  title = paste("Expression of Top Sex-Dimorphic Gene:", top_dimorphic_gene)
+)
+```
+
+# Pathway Enrichment Analysis
+
+We perform pathway enrichment on the gene lists derived from the stratified analysis.
+
+```{r pathway-analysis}
+# GO analysis for female-specific genes
+female_specific_genes <- sex_specific_results %>%
+  filter(gene_type == "female-specific") %>%
+  pull(gene_id)
+
+cat("\nPerforming GO enrichment analysis for female-specific genes...\n")
+go_results <- improved_pathway_enrichment(
+  gene_list = female_specific_genes,
+  enrichment_db = "GO"
+)
+if (!is.null(go_results) && nrow(go_results) > 0) {
+  cat("Top GO Terms:\n")
+  print(head(as.data.frame(go_results)))
+} else {
+  cat("No significant GO terms found.\n")
+}
+
+# GO analysis for male-specific genes
+male_specific_genes <- sex_specific_results %>%
+  filter(gene_type == "male-specific") %>%
+  pull(gene_id)
+
+cat("\nPerforming GO pathway analysis for male-specific genes...\n")
+go_results_male <- improved_pathway_enrichment(
+  gene_list = male_specific_genes,
+  enrichment_db = "GO"
+)
+if (!is.null(go_results_male) && nrow(go_results_male) > 0) {
+  cat("Top GO Pathways:\n")
+  print(head(as.data.frame(go_results_male)))
+} else {
+  cat("No significant GO pathways found.\n")
+}
+```
+
+# Protein-protein Interaction Network Analysis
+
+Finally, we construct a protein-protein interaction network using the results from the stratified analysis.
+
+### 1. Fetching the STRING Network
+
+First, we download and process a human protein-protein interaction network from the STRING database using `get_string_network`. As this step can be time-consuming, for this vignette we will create a small dummy network for demonstration purposes.
+
+```{r get-string-network}
+# In a real analysis, you would run:
+# string_network <- get_string_network(organism = "9606", score_threshold = 700)
+
+# For this vignette, we create a small dummy network
+set.seed(123)
+dummy_nodes <- unique(c(male_specific_genes, female_specific_genes))
+if(length(dummy_nodes) > 100) dummy_nodes <- sample(dummy_nodes, 100)
+dummy_edges <- data.frame(
+  from = sample(dummy_nodes, 50, replace = TRUE),
+  to = sample(dummy_nodes, 50, replace = TRUE)
+)
+string_network <- igraph::graph_from_data_frame(dummy_edges, directed = FALSE)
+string_network <- igraph::simplify(string_network)
+cat("Using a dummy network for demonstration purposes.\n")
+```
+
+### 2. Constructing the PCSF Network
+
+Next, we define "prizes" for our genes based on their statistical significance (e.g., -log10 of the p-value) and use the `construct_ppi_pcsf` function to build a context-specific network.
+
+```{r construct-pcsf-network}
+# Use male DE results to define prizes
+prizes <- -log10(male_deg$P.Value)
+names(prizes) <- rownames(male_deg)
+prizes <- prizes[is.finite(prizes)]
+
+# Construct the network
+ppi <- construct_ppi_pcsf(
+  g = string_network,
+  prizes = prizes,
+  w = 2,
+  b = 1,
+  mu = 5e-04
+)
+
+cat("Constructed PPI with", igraph::vcount(ppi), "nodes and", igraph::ecount(ppi), "edges.\n")
+```
+
+### 3. Visualizing the Network
+
+Finally, we use the `visualize_network` function to plot the resulting protein-protein interaction network. The node colors can represent different properties, such as the relative expression changes in males versus females.
+
+```{r visualize-network}
+visualize_network(
+  g = ppi,
+  female_res = female_deg,
+  male_res = male_deg,
+  vertex.size = 8,
+  vertex.label.cex = 0.7,
+  main = "Sex-Specific Protein-Protein Interaction Network"
+)
+```
+
+# Conclusion
+
+This vignette has demonstrated two key approaches for analyzing sex-specific effects in bulk RNA-seq data. While sex-stratified analysis is a common first step, **interaction analysis provides a more statistically robust method** for identifying genes whose regulation by disease is truly dependent on sex. We recommend using an interaction-based approach where possible, while being mindful of the need for adequate sample sizes.

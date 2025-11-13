@@ -1,0 +1,221 @@
+---
+title: "Global Report Bulk RNA-Seq"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    theme: flatly
+    highlight: tango
+params:
+  de_results: NULL
+  enrichment_results: NULL
+  grn_object: NULL
+  report_date: !r Sys.Date()
+vignette: >
+  %\VignetteIndexEntry{Template report bulk rna-seq}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+library(ggplot2)
+library(DT)
+library(dplyr)
+library(igraph)
+library(ggraph)
+library(knitr)
+library(kableExtra)
+library(ggrepel)
+library(gridExtra)
+library(htmltools)
+
+# fallback operator
+`%||%` <- function(x, y) if (!is.null(x)) x else y
+```
+
+#  Overview
+
+This is a global report built for **XYomics output on Bulk-RNA-Seq data**.
+
+**Date:** `r params$report_date`\
+**Includes:** - Differential expression analysis (DEGs) - Pathway enrichment analysis - Protein-protein interaction networks analysis
+
+------------------------------------------------------------------------
+
+#  Differential Expression Results of categorized DEGs 
+
+```{r de-results, echo=F}
+
+get_name <- function(df){
+
+  names <- unique(df$gene_type)
+  return(names)
+}
+
+
+render_de_table <-  function(df) {
+    if (nrow(df) == 0) {
+    return(tags$div(
+      tags$h4(paste("DEGs Results -", name)),
+      tags$p("No significant DEGs for this category.")
+    ))
+  }
+  else
+  {   name <- get_name(df) 
+    return(tags$div(
+      tags$h4(paste("DEGs Results -", name)),
+      tags$p( datatable(df%>% mutate_if(is.numeric, ~format(., scientific=T, digits=4)),
+            options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE)))
+  )
+
+  }
+
+ 
+  
+  
+}
+
+tagList(
+  lapply(params$de_results, render_de_table)
+)
+```
+
+------------------------------------------------------------------------
+
+# Enrichment / Pathway Analysis
+
+```{r enrichment-tables, echo=FALSE}
+
+render_enrichment_table <- function(df, name) {
+  if (is.null(df)) {
+    return(tags$div(
+      tags$h4(paste("Pathway Enrichment -", name)),
+      tags$p("No significant pathways for this category.")
+    ))
+  }
+  else
+  {  
+    return(tags$div(
+    tags$h4(paste("Pathway Enrichment -", name)),
+    tags$p(datatable(
+      df %>% mutate_if(is.numeric, ~format(., scientific=T, digits=4)),
+      options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE)))
+  )
+    
+  }
+  
+  
+}
+
+
+
+tagList(lapply(seq_along(params$enrichment_results), function(i) {
+  name <- names(params$enrichment_results)[i] %||% paste("Set", i)
+  df <- params$enrichment_results[[i]]
+  render_enrichment_table(df, name)
+}))
+```
+
+## Dotplot of the pathways by cell types
+```{r pathways visualization , echo = FALSE,  results='asis', fig.keep='all', fig.width=15, fig.height=7}
+create_dotplot <- function(df, plot_name) {
+  if (nrow(df) > 0) {
+    enr <- convertdf2enr(df)
+    return(dotplot(enr, showCategory = 10, title = paste("Top enriched Pathways -", plot_name)))
+  } else {
+    return(NULL)
+  }
+}
+
+all_plots <- list()
+
+for (i in seq_along(params$enrichment_results)) {
+  df <- params$enrichment_results[[i]]
+  plot_name <- names(params$enrichment_results)[i] %||% paste("Enrichment", i)
+  
+  p <- create_dotplot(df, plot_name)
+  if (!is.null(p)) {
+    all_plots[[plot_name]] <- p
+  }
+}
+
+# Display plots
+if (length(all_plots) >= 1) {
+  for (plot_name in names(all_plots)) {
+    cat(sprintf("\n\n### DotPlot - %s\n\n", plot_name))
+    grid.arrange(grobs = list(all_plots[[plot_name]]), ncol = 1)
+  }
+}
+```
+
+
+# Protein-protein interaction network (PPI)
+
+```{r grn-summary , echo = FALSE,  results='asis', fig.keep='all', fig.width=15, fig.height=10}
+all_plots <- list()
+
+for (i in seq_along(params$grn_object)) {
+  g <- params$grn_object[[i]]
+  network_name <- names(params$grn_object)[i] %||% paste("Network", i)
+
+  if (vcount(g) > 2) {
+    # Compute degree
+    degree_vals <- degree(g, mode = "all")
+    V(g)$degree <- degree_vals
+
+    # Identify top hub nodes
+    top_n <- min(20, vcount(g))
+    top_nodes <- names(sort(degree_vals, decreasing = TRUE))[1:top_n]
+
+    # Create layout
+    layout <- create_layout(g, layout = "fr")
+
+    # Add labels
+    layout$label <- if (vcount(g) < 20) {
+      layout$name
+    } else {
+      ifelse(layout$name %in% top_nodes, layout$name, "")
+    }
+
+    all_plots[[network_name]] <- ggraph(layout) +
+      geom_edge_link(aes(edge_alpha = 0.5), color = "grey", show.legend = FALSE) +
+      geom_node_point(aes(size = degree, fill = degree), shape = 21, color = "black", stroke = 0.5) +
+      scale_size(range = c(1, 10)) +
+      scale_fill_gradient(low = "azure", high = "darkcyan") +
+      geom_label_repel(
+        aes(x = x, y = y, label = label),
+        color = "black", size = 3, fill = "white", box.padding = 0.5,
+        point.padding = 0.5, max.overlaps = 1000
+      ) +
+      theme_void() +
+      labs(
+        title = paste("Protein-protein interaction network -", network_name),
+        size = "Node Degree",
+        fill = "Node Degree"
+      ) +
+      theme(legend.position = "right", plot.title = element_text(hjust = 0.5, size = 14))
+  }
+}
+
+# Plot all
+if (length(all_plots) >= 1) {
+  for (plot_name in names(all_plots)) {
+    cat(sprintf("\n\n### PPI - %s\n\n", plot_name))
+    grid.arrange(grobs = list(all_plots[[plot_name]]), ncol = 1)
+  }
+}
+
+```
+
+------------------------------------------------------------------------
+
+# Session Info
+
+```{r session-info}
+sessionInfo()
+```
+
+------------------------------------------------------------------------
+
+### Auto-generated on `r Sys.time()` using `XYomics` reporting
