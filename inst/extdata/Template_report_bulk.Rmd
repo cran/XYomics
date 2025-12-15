@@ -6,7 +6,6 @@ output:
     toc_depth: 2
     number_sections: true
     theme: flatly
-    highlight: tango
 params:
   de_results: NULL
   enrichment_results: NULL

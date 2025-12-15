@@ -13,8 +13,6 @@
 #' @param node_names A \code{CharacterVector} demonstrates the names of the nodes.
 #' @param node_prizes A \code{NumericVector} which corresponds to the node prizes.
 #' @author Murodzhon Akhmedov
-#' 
-#' @return R object (SEXP) which is converted from C++ List
 #'
 call_sr <- function(from, to, cost, node_names, node_prizes) {
     .Call(`_XYomics_call_sr`, from, to, cost, node_names, node_prizes)

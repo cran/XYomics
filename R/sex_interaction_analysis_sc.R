@@ -74,7 +74,7 @@ sex_interaction_analysis_sc <- function(seurat_obj,
   colnames(design) <- gsub("Group", "", colnames(design)) # Clean up column names
 
   DefaultAssay(cell_subset_seurat) <- "RNA"
-  dge <- edgeR::DGEList(counts = as.matrix(Seurat::GetAssayData(cell_subset_seurat, slot = "counts")))
+  dge <- edgeR::DGEList(counts = as.matrix(Seurat::GetAssayData(cell_subset_seurat, layer = "counts")))
   keep <- edgeR::filterByExpr(dge, design)
   dge <- dge[keep, , keep.lib.sizes = FALSE]
   dge <- edgeR::calcNormFactors(dge, method = "TMMwsp")

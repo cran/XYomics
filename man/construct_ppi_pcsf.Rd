@@ -32,6 +32,8 @@ construct_ppi_pcsf(
 \value{
 An igraph object representing the extracted subnetwork. Returns NULL invisibly 
   if no prize genes are present, the subnetwork is too small, or the PCSF algorithm fails.
+
+An igraph object representing the extracted subnetwork. Returns NULL invisibly if no prize genes are present, the subnetwork is too small, or the PCSF algorithm fails
 }
 \description{
 Constructs a condition-specific gene regulatory network based on differential

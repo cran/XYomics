@@ -17,9 +17,6 @@ call_sr(from, to, cost, node_names, node_prizes)
 
 \item{node_prizes}{A \code{NumericVector} which corresponds to the node prizes.}
 }
-\value{
-R object (SEXP) which is converted from C++ List.
-}
 \description{
 This function is internally used to solve the PCST.
 }

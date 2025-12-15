@@ -24,7 +24,7 @@ Authors:
 
 Other contributors:
 \itemize{
-  \item Murodzhon Akhmedov [contributor, copyright holder]
+  \item Murodzhon Akhmedov [copyright holder]
 }
 
 }

@@ -1,6 +1,6 @@
 Package: XYomics
 Title: Analysis of Sex Differences in Omics Data for Complex Diseases
-Version: 0.1.1
+Version: 0.1.2
 Authors@R: 
   c(
     person("Enrico", "Glaab", email = "enrico.glaab@uni.lu", role = c("aut", "cre")),
@@ -22,10 +22,10 @@ Suggests: R.utils, DT, gridExtra, knitr, htmltools, kableExtra,
 LinkingTo: Rcpp
 VignetteBuilder: knitr, rmarkdown
 NeedsCompilation: yes
-Packaged: 2025-11-10 15:07:41 UTC; mohamed.soudy
+Packaged: 2025-12-15 10:09:59 UTC; mohamed.soudy
 Author: Enrico Glaab [aut, cre],
   Sophie Le Bars [aut],
   Mohamed Soudy [aut],
   Murodzhon Akhmedov [cph]
 Repository: CRAN
-Date/Publication: 2025-11-13 21:20:08 UTC
+Date/Publication: 2025-12-15 11:30:02 UTC

@@ -291,7 +291,7 @@ plot_network <- function(g, cell_type, DEG_type, result_categories) {
   barplots <- lapply(1:length(V(g)$name), function(i) {
     ggplot(df[df$Gene_Symbols==V(g)$name[i],], aes(Sex, logFC, fill = Sex)) +
       geom_col(show.legend = FALSE) +
-      geom_hline(yintercept = 0, color = "black", size = 0.3) +  # zero line
+      geom_hline(yintercept = 0, color = "black", linewidth = 0.3) +  # zero line
       theme_void() +
       theme(
         plot.margin = margin(0, 0, 0, 0),
@@ -315,6 +315,5 @@ plot_network <- function(g, cell_type, DEG_type, result_categories) {
     }
     
   }
-  
   return(gplot_net)
 }
