@@ -8,7 +8,7 @@ categorized_enrich_sc(
   DEGs_category,
   enrichment_db = "KEGG",
   organism = "hsa",
-  org_db = org.Hs.eg.db,
+  org_db = org.Hs.eg.db::org.Hs.eg.db,
   pvalueCutoff = 0.05,
   qvalueCutoff = 0.2
 )

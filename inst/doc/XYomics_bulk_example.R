@@ -1,5 +1,5 @@
 params <-
-list(report_date = structure(20437, class = "Date"))
+list(report_date = structure(20461, class = "Date"))
 
 ## ----simulate-data, message=FALSE, warning=FALSE------------------------------
 library(XYomics)

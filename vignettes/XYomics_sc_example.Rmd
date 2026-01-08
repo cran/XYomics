@@ -180,7 +180,7 @@ We perform pathway enrichment analysis to identify biological pathways over-repr
 
 ```{r pathway-analysis, message=FALSE, warning=FALSE}
 # Run for all cell types
-pathway_category <- lapply(result_categories, function(cell) categorized_enrich_sc(cell))
+pathway_category <- lapply(result_categories, function(cell) categorized_enrich_sc(cell, enrichment_db = "REACTOME"))
 cat("\nTop pathway results for 'cell type 1':\n")
 print(head(pathway_category$`cell type 1`))
 

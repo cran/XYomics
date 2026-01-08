@@ -1,5 +1,5 @@
 params <-
-list(report_date = structure(20437, class = "Date"))
+list(report_date = structure(20461, class = "Date"))
 
 ## ----simulate-data, message=FALSE, warning=FALSE------------------------------
 library(Seurat)
@@ -106,7 +106,7 @@ if (length(top_genes) > 0) {
 
 ## ----pathway-analysis, message=FALSE, warning=FALSE---------------------------
 # Run for all cell types
-pathway_category <- lapply(result_categories, function(cell) categorized_enrich_sc(cell))
+pathway_category <- lapply(result_categories, function(cell) categorized_enrich_sc(cell, enrichment_db = "REACTOME"))
 cat("\nTop pathway results for 'cell type 1':\n")
 print(head(pathway_category$`cell type 1`))
 

@@ -8,7 +8,7 @@ improved_pathway_enrichment(
   gene_list,
   enrichment_db = "KEGG",
   organism = "hsa",
-  org_db = org.Hs.eg.db,
+  org_db = org.Hs.eg.db::org.Hs.eg.db,
   pvalueCutoff = 0.05,
   qvalueCutoff = 0.2
 )

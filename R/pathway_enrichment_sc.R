@@ -26,14 +26,12 @@
 #' - Requires the 'clusterProfiler' package for enrichment analysis.
 #' - Ensures appropriate error handling for missing genes or database issues.
 #' @importFrom clusterProfiler enrichKEGG enrichGO
-#' @importFrom ReactomePA enrichPathway
-#' @importFrom org.Hs.eg.db org.Hs.eg.db
 #'
 #' @export
 
 categorized_enrich_sc <- function(DEGs_category, enrichment_db = "KEGG", 
                                 organism = "hsa", 
-                                org_db = org.Hs.eg.db,
+                                org_db = org.Hs.eg.db::org.Hs.eg.db,
                                 pvalueCutoff = 0.05, 
                                 qvalueCutoff = 0.2){
   
@@ -91,13 +89,33 @@ categorized_enrich_sc <- function(DEGs_category, enrichment_db = "KEGG",
                                                            qvalueCutoff = qvalueCutoff)
         } else if (db == "REACTOME") {
           # Adjust organism code for Reactome
-          reactome_organism <- ifelse(organism == "hsa", "human", organism)
+          reactome_organism <- ifelse(organism == "hsa", "hsapiens", organism)
           
           # Perform Reactome pathway enrichment analysis
-          enrichment_result <- enrichPathway(gene = entrez_ids$ENTREZID, 
-                                                         organism = reactome_organism, 
-                                                         pvalueCutoff = pvalueCutoff, 
-                                                         qvalueCutoff = qvalueCutoff)
+          enrichment_result <- tryCatch(
+            gost(query=degs, sources="REAC", organism=reactome_organism,
+                 user_threshold=pvalueCutoff, evcodes=TRUE, correction_method="fdr")$result,
+            error = function(e) NULL
+          )
+          
+          if (!is.null(enrichment_result) && nrow(enrichment_result) > 0) {
+            enrichment_result$p.adjust <- enrichment_result$p_value
+            enrichment_result$qvlaue <- enrichment_result$p_value 
+            enrichment_result$GeneRatio <- enrichment_result$intersection_size / enrichment_result$term_size
+            enrichment_result$category <- enrichment_result$term_name
+            enrichment_result$geneID <- gsub(",", "/", enrichment_result$intersection)
+            cols_to_keep <- c("category", "p_value", "p.adjust", "qvlaue", "term_size", "term_id", "term_name", "intersection_size" , "intersection", "GeneRatio", "geneID")
+            enrichment_result <- enrichment_result[, cols_to_keep, drop = FALSE]
+          } else {
+            enrichment_result <- data.frame(matrix(ncol = 11, nrow = 0))
+            colnames(enrichment_result) <- c("category", "pvalue", "p.adjust", "qvlaue", "term_size", "term_id", "term_name", "intersection_size" , "intersection", "GeneRatio", "geneID")
+          }
+          colnames(enrichment_result)[colnames(enrichment_result) == "term_name"] <- "Description"
+          colnames(enrichment_result)[colnames(enrichment_result) == "intersection_size"] <- "Count"
+          colnames(enrichment_result)[colnames(enrichment_result) == "p_value"] <- "pvalue"
+          colnames(enrichment_result)[colnames(enrichment_result) == "term_id"] <- "ID"
+          
+          
         } else {
           stop("Unsupported enrichment database. Please choose 'KEGG', 'GO', or 'REACTOME'.")
         }

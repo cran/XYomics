@@ -647,47 +647,65 @@ pathways over-represented in our DEG categories. The
 <code>categorized_enrich_sc</code> function automates this for all
 categories.</p>
 <pre class="r"><code># Run for all cell types
-pathway_category &lt;- lapply(result_categories, function(cell) categorized_enrich_sc(cell))
+pathway_category &lt;- lapply(result_categories, function(cell) categorized_enrich_sc(cell, enrichment_db = &quot;REACTOME&quot;))
 cat(&quot;\nTop pathway results for &#39;cell type 1&#39;:\n&quot;)</code></pre>
 <pre><code>## 
 ## Top pathway results for &#39;cell type 1&#39;:</code></pre>
 <pre class="r"><code>print(head(pathway_category$`cell type 1`))</code></pre>
 <pre><code>## $male_specific
-##                                      category
-## hsa03460       Genetic Information Processing
-## hsa04142                   Cellular Processes
-## hsa04210                   Cellular Processes
-## hsa04514 Environmental Information Processing
-##                                  subcategory       ID
-## hsa03460              Replication and repair hsa03460
-## hsa04142            Transport and catabolism hsa04142
-## hsa04210               Cell growth and death hsa04210
-## hsa04514 Signaling molecules and interaction hsa04514
-##                                       Description GeneRatio  BgRatio     pvalue
-## hsa03460                   Fanconi anemia pathway       1/3  55/9512 0.01724821
-## hsa04142                                 Lysosome       1/3 133/9512 0.04136752
-## hsa04210                                Apoptosis       1/3 137/9512 0.04259365
-## hsa04514 Cell adhesion molecule (CAM) interaction       1/3 160/9512 0.04962364
-##            p.adjust qvalue geneID Count
-## hsa03460 0.04962364     NA  22909     1
-## hsa04142 0.04962364     NA   1512     1
-## hsa04210 0.04962364     NA   1512     1
-## hsa04514 0.04962364     NA  80381     1
-## 
-## $female_specific
-##  [1] category    subcategory ID          Description GeneRatio   BgRatio    
-##  [7] pvalue      p.adjust    qvalue      geneID      Count      
+##  [1] category     pvalue       p.adjust     qvlaue       term_size   
+##  [6] ID           Description  Count        intersection GeneRatio   
+## [11] geneID      
 ## &lt;0 rows&gt; (or 0-length row.names)
 ## 
+## $female_specific
+##                                              category     pvalue   p.adjust
+## 1 Acrosome Reaction and Sperm:Oocyte Membrane Binding 0.03114528 0.03114528
+## 2                   ER to Golgi Anterograde Transport 0.03114528 0.03114528
+## 3  Transport to the Golgi and subsequent modification 0.03114528 0.03114528
+## 4                   Asparagine N-linked glycosylation 0.03518879 0.03518879
+## 5        Mitochondrial iron-sulfur cluster biogenesis 0.03518879 0.03518879
+## 6                               Physiological factors 0.03518879 0.03518879
+## 7    YAP1- and WWTR1 (TAZ)-stimulated gene expression 0.03518879 0.03518879
+## 8                                       Fertilization 0.04998135 0.04998135
+##       qvlaue term_size                 ID
+## 1 0.03114528         6 REAC:R-HSA-1300645
+## 2 0.03114528       155  REAC:R-HSA-199977
+## 3 0.03114528       186  REAC:R-HSA-948021
+## 4 0.03518879       305  REAC:R-HSA-446203
+## 5 0.03518879        11 REAC:R-HSA-1362409
+## 6 0.03518879        14 REAC:R-HSA-5578768
+## 7 0.03518879        14 REAC:R-HSA-2032785
+## 8 0.04998135        26 REAC:R-HSA-1187000
+##                                           Description Count intersection
+## 1 Acrosome Reaction and Sperm:Oocyte Membrane Binding     1          ACR
+## 2                   ER to Golgi Anterograde Transport     2    PREB,ANK3
+## 3  Transport to the Golgi and subsequent modification     2    PREB,ANK3
+## 4                   Asparagine N-linked glycosylation     2    PREB,ANK3
+## 5        Mitochondrial iron-sulfur cluster biogenesis     1     SLC25A37
+## 6                               Physiological factors     1         NPPA
+## 7    YAP1- and WWTR1 (TAZ)-stimulated gene expression     1         NPPA
+## 8                                       Fertilization     1          ACR
+##     GeneRatio    geneID
+## 1 0.166666667       ACR
+## 2 0.012903226 PREB/ANK3
+## 3 0.010752688 PREB/ANK3
+## 4 0.006557377 PREB/ANK3
+## 5 0.090909091  SLC25A37
+## 6 0.071428571      NPPA
+## 7 0.071428571      NPPA
+## 8 0.038461538       ACR
+## 
 ## $sex_dimorphic
-##                    category      subcategory       ID        Description
-## hsa04978 Organismal Systems Digestive system hsa04978 Mineral absorption
-##          GeneRatio BgRatio      pvalue   p.adjust     qvalue   geneID Count
-## hsa04978       2/7 61/9512 0.000832167 0.03661535 0.02627896 7018/491     2
+##  [1] category     pvalue       p.adjust     qvlaue       term_size   
+##  [6] ID           Description  Count        intersection GeneRatio   
+## [11] geneID      
+## &lt;0 rows&gt; (or 0-length row.names)
 ## 
 ## $sex_neutral
-##  [1] category    subcategory ID          Description GeneRatio   BgRatio    
-##  [7] pvalue      p.adjust    qvalue      geneID      Count      
+##  [1] category     pvalue       p.adjust     qvlaue       term_size   
+##  [6] ID           Description  Count        intersection GeneRatio   
+## [11] geneID      
 ## &lt;0 rows&gt; (or 0-length row.names)</code></pre>
 <pre class="r"><code># Run for one specific cell type
 pathway_category_one &lt;- categorized_enrich_sc(result_one)
@@ -707,15 +725,15 @@ cat(&quot;\nTop pathway results for &#39;cell type 1&#39; (re-run separately):\n
 ## hsa04210               Cell growth and death hsa04210
 ## hsa04514 Signaling molecules and interaction hsa04514
 ##                                       Description GeneRatio  BgRatio     pvalue
-## hsa03460                   Fanconi anemia pathway       1/3  55/9512 0.01724821
-## hsa04142                                 Lysosome       1/3 133/9512 0.04136752
-## hsa04210                                Apoptosis       1/3 137/9512 0.04259365
-## hsa04514 Cell adhesion molecule (CAM) interaction       1/3 160/9512 0.04962364
+## hsa03460                   Fanconi anemia pathway       1/3  55/9521 0.01723199
+## hsa04142                                 Lysosome       1/3 133/9521 0.04132896
+## hsa04210                                Apoptosis       1/3 137/9521 0.04255397
+## hsa04514 Cell adhesion molecule (CAM) interaction       1/3 160/9521 0.04957752
 ##            p.adjust qvalue geneID Count
-## hsa03460 0.04962364     NA  22909     1
-## hsa04142 0.04962364     NA   1512     1
-## hsa04210 0.04962364     NA   1512     1
-## hsa04514 0.04962364     NA  80381     1
+## hsa03460 0.04957752     NA  22909     1
+## hsa04142 0.04957752     NA   1512     1
+## hsa04210 0.04957752     NA   1512     1
+## hsa04514 0.04957752     NA  80381     1
 ## 
 ## $female_specific
 ##  [1] category    subcategory ID          Description GeneRatio   BgRatio    
@@ -725,8 +743,8 @@ cat(&quot;\nTop pathway results for &#39;cell type 1&#39; (re-run separately):\n
 ## $sex_dimorphic
 ##                    category      subcategory       ID        Description
 ## hsa04978 Organismal Systems Digestive system hsa04978 Mineral absorption
-##          GeneRatio BgRatio      pvalue   p.adjust     qvalue   geneID Count
-## hsa04978       2/7 61/9512 0.000832167 0.03661535 0.02627896 7018/491     2
+##          GeneRatio BgRatio       pvalue   p.adjust     qvalue   geneID Count
+## hsa04978       2/7 61/9521 0.0008306107 0.03654687 0.02622981 7018/491     2
 ## 
 ## $sex_neutral
 ##  [1] category    subcategory ID          Description GeneRatio   BgRatio    
@@ -797,119 +815,119 @@ for (cell_type in names(result_categories)) {
 network_results</code></pre>
 <pre><code>## $`cell type 1`
 ## $`cell type 1`$male_network
-## IGRAPH 33db430 UNWB 0 0 -- 
+## IGRAPH fe0f794 UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33db430 (vertex names):
+## + edges from fe0f794 (vertex names):
 ## 
 ## $`cell type 1`$female_network
-## IGRAPH 33dc103 UNWB 0 0 -- 
+## IGRAPH fe103c9 UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33dc103 (vertex names):
+## + edges from fe103c9 (vertex names):
 ## 
 ## $`cell type 1`$dimorphic_network
-## IGRAPH 33dd866 UNWB 5 4 -- 
+## IGRAPH fe1207f UNWB 5 4 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33dd866 (vertex names):
+## + edges from fe1207f (vertex names):
 ## [1] CACYBP--GSK3A  DVL3  --GSK3A  GSK3B --POLR1E CACYBP--GSK3B 
 ## 
 ## $`cell type 1`$neutral_network
-## IGRAPH 33deb3a UNWB 0 0 -- 
+## IGRAPH fe13ae8 UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33deb3a (vertex names):
+## + edges from fe13ae8 (vertex names):
 ## 
 ## 
 ## $`cell type 2`
 ## $`cell type 2`$male_network
-## IGRAPH 33e0798 UNWB 3 2 -- 
+## IGRAPH fe14b8a UNWB 3 2 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33e0798 (vertex names):
+## + edges from fe14b8a (vertex names):
 ## [1] CCL2--CXCR2 CCL2--CSF2 
 ## 
 ## $`cell type 2`$female_network
-## IGRAPH 33e3467 UNWB 0 0 -- 
+## IGRAPH fe16406 UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33e3467 (vertex names):
+## + edges from fe16406 (vertex names):
 ## 
 ## $`cell type 2`$dimorphic_network
-## IGRAPH 33e4ec2 UNWB 3 2 -- 
+## IGRAPH fe1805b UNWB 3 2 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33e4ec2 (vertex names):
+## + edges from fe1805b (vertex names):
 ## [1] FBXO43--SKP1 CACYBP--SKP1
 ## 
 ## $`cell type 2`$neutral_network
-## IGRAPH 33e5d59 UNWB 0 0 -- 
+## IGRAPH fe192e6 UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33e5d59 (vertex names):
+## + edges from fe192e6 (vertex names):
 ## 
 ## 
 ## $`cell type 3`
 ## $`cell type 3`$male_network
-## IGRAPH 33e709c UNWB 0 0 -- 
+## IGRAPH fe19f3c UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33e709c (vertex names):
+## + edges from fe19f3c (vertex names):
 ## 
 ## $`cell type 3`$female_network
-## IGRAPH 33e8def UNWB 0 0 -- 
+## IGRAPH fe1ae68 UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33e8def (vertex names):
+## + edges from fe1ae68 (vertex names):
 ## 
 ## $`cell type 3`$dimorphic_network
-## IGRAPH 33eb24c UNWB 7 6 -- 
+## IGRAPH fe1c417 UNWB 7 6 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33eb24c (vertex names):
+## + edges from fe1c417 (vertex names):
 ## [1] CACYBP--GSK3B  CACYBP--GSK3A  DVL3  --GSK3A  POLR1E--POLR2K POLR2K--SUZ12 
 ## [6] GSK3B --POLR1E
 ## 
 ## $`cell type 3`$neutral_network
-## IGRAPH 33ed90a UNWB 0 0 -- 
+## IGRAPH fe1d8eb UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33ed90a (vertex names):
+## + edges from fe1d8eb (vertex names):
 ## 
 ## 
 ## $`cell type 4`
 ## $`cell type 4`$male_network
-## IGRAPH 33ef09d UNWB 0 0 -- 
+## IGRAPH fe1e722 UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33ef09d (vertex names):
+## + edges from fe1e722 (vertex names):
 ## 
 ## $`cell type 4`$female_network
-## IGRAPH 33f09e1 UNWB 0 0 -- 
+## IGRAPH fe1f516 UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33f09e1 (vertex names):
+## + edges from fe1f516 (vertex names):
 ## 
 ## $`cell type 4`$dimorphic_network
-## IGRAPH 33f2c27 UNWB 0 0 -- 
+## IGRAPH fe20d40 UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33f2c27 (vertex names):
+## + edges from fe20d40 (vertex names):
 ## 
 ## $`cell type 4`$neutral_network
-## IGRAPH 33f54b9 UNWB 0 0 -- 
+## IGRAPH fe2249d UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33f54b9 (vertex names):
+## + edges from fe2249d (vertex names):
 ## 
 ## 
 ## $`cell type 5`
 ## $`cell type 5`$male_network
-## IGRAPH 33f66ed UNWB 0 0 -- 
+## IGRAPH fe233b7 UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33f66ed (vertex names):
+## + edges from fe233b7 (vertex names):
 ## 
 ## $`cell type 5`$female_network
-## IGRAPH 33f7b31 UNWB 3 2 -- 
+## IGRAPH fe2439c UNWB 3 2 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33f7b31 (vertex names):
+## + edges from fe2439c (vertex names):
 ## [1] SEC13--SUMO3 PREB --SEC13
 ## 
 ## $`cell type 5`$dimorphic_network
-## IGRAPH 33f9a2f UNWB 3 2 -- 
+## IGRAPH fe253b9 UNWB 3 2 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33f9a2f (vertex names):
+## + edges from fe253b9 (vertex names):
 ## [1] POLR1E--POLR2K POLR2K--SUZ12 
 ## 
 ## $`cell type 5`$neutral_network
-## IGRAPH 33fb49b UNWB 0 0 -- 
+## IGRAPH fe26310 UNWB 0 0 -- 
 ## + attr: name (v/c), prize (v/n), type (v/c), weight (e/n)
-## + edges from 33fb49b (vertex names):</code></pre>
+## + edges from fe26310 (vertex names):</code></pre>
 <pre class="r"><code># Example for one specific cell type
 
 # Create prizes from dimorphic DEGs in &#39;cell type 1&#39;

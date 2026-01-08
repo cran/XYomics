@@ -1,6 +1,6 @@
 Package: XYomics
 Title: Analysis of Sex Differences in Omics Data for Complex Diseases
-Version: 0.1.2
+Version: 0.1.3
 Authors@R: 
   c(
     person("Enrico", "Glaab", email = "enrico.glaab@uni.lu", role = c("aut", "cre")),
@@ -12,20 +12,20 @@ Maintainer: Enrico Glaab <enrico.glaab@uni.lu>
 Description: Tools to analyze sex differences in omics data for complex diseases. It includes functions for differential expression analysis using the 'limma' method <doi:10.1093/nar/gkv007>, interaction testing between sex and disease, pathway enrichment with 'clusterProfiler' <doi:10.1089/omi.2011.0118>, and gene regulatory network (GRN) construction and analysis using 'igraph'. The package enables a reproducible workflow from raw data processing to biological interpretation. 
 Depends: R (>= 3.6)
 Imports: limma, igraph, edgeR, Seurat, SeuratObject, clusterProfiler,
-        org.Hs.eg.db, ReactomePA, data.table, ggplot2, tidyr, grid,
-        ggraph, dplyr, ggrepel, scales, Rcpp, methods
+        gprofiler2, data.table, ggplot2, tidyr, grid, ggraph, dplyr,
+        ggrepel, scales, Rcpp, methods
 License: MIT + file LICENSE
 Encoding: UTF-8
 RoxygenNote: 7.3.3
 Suggests: R.utils, DT, gridExtra, knitr, htmltools, kableExtra,
-        rmarkdown, stringr
+        rmarkdown, stringr, org.Hs.eg.db
 LinkingTo: Rcpp
 VignetteBuilder: knitr, rmarkdown
 NeedsCompilation: yes
-Packaged: 2025-12-15 10:09:59 UTC; mohamed.soudy
+Packaged: 2026-01-08 14:12:00 UTC; mohamed.soudy
 Author: Enrico Glaab [aut, cre],
   Sophie Le Bars [aut],
   Mohamed Soudy [aut],
   Murodzhon Akhmedov [cph]
 Repository: CRAN
-Date/Publication: 2025-12-15 11:30:02 UTC
+Date/Publication: 2026-01-08 19:30:09 UTC
